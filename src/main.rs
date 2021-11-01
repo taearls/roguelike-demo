@@ -1,5 +1,6 @@
 use rltk::{GameState, Point, Rltk};
 use specs::prelude::*;
+use specs::saveload::{SimpleMarker, SimpleMarkerAllocator};
 mod components;
 pub use components::*;
 mod map;
@@ -23,6 +24,7 @@ mod damage_system;
 use damage_system::DamageSystem;
 mod inventory_system;
 use inventory_system::{ItemCollectionSystem, ItemDropSystem, ItemUseSystem};
+mod saveload_system;
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum RunState {
@@ -32,7 +34,14 @@ pub enum RunState {
     MonsterTurn,
     ShowInventory,
     ShowDropItem,
-    ShowTargeting { range: i32, item: Entity },
+    ShowTargeting {
+        range: i32,
+        item: Entity,
+    },
+    MainMenu {
+        menu_selection: gui::MainMenuSelection,
+    },
+    SaveGame,
 }
 
 pub struct State {
@@ -157,6 +166,32 @@ impl GameState for State {
                     }
                 }
             }
+            RunState::MainMenu { .. } => {
+                let result = gui::main_menu(self, ctx);
+                match result {
+                    gui::MainMenuResult::NoSelection { selected } => {
+                        newrunstate = RunState::MainMenu {
+                            menu_selection: selected,
+                        }
+                    }
+                    gui::MainMenuResult::Selected { selected } => match selected {
+                        gui::MainMenuSelection::NewGame => newrunstate = RunState::PreRun,
+                        gui::MainMenuSelection::LoadGame => {
+                            saveload_system::load_game(&mut self.ecs);
+                            newrunstate = RunState::AwaitingInput;
+                        }
+                        gui::MainMenuSelection::Quit => {
+                            ::std::process::exit(0);
+                        }
+                    },
+                }
+            }
+            RunState::SaveGame => {
+                saveload_system::save_game(&mut self.ecs);
+                newrunstate = RunState::MainMenu {
+                    menu_selection: gui::MainMenuSelection::LoadGame,
+                };
+            }
         }
 
         {
@@ -165,21 +200,26 @@ impl GameState for State {
         }
         damage_system::delete_the_dead(&mut self.ecs);
 
-        draw_map(&self.ecs, ctx);
+        match newrunstate {
+            RunState::MainMenu { .. } => {}
+            _ => {
+                draw_map(&self.ecs, ctx);
 
-        let map = self.ecs.fetch::<Map>();
-        let positions = self.ecs.read_storage::<Position>();
-        let renderables = self.ecs.read_storage::<Renderable>();
+                let map = self.ecs.fetch::<Map>();
+                let positions = self.ecs.read_storage::<Position>();
+                let renderables = self.ecs.read_storage::<Renderable>();
 
-        let mut data = (&positions, &renderables).join().collect::<Vec<_>>();
-        data.sort_by(|&a, &b| b.1.render_order.cmp(&a.1.render_order));
-        for (pos, render) in data.iter() {
-            let idx = map.xy_idx(pos.x, pos.y);
-            if map.visible_tiles[idx] {
-                ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph)
+                let mut data = (&positions, &renderables).join().collect::<Vec<_>>();
+                data.sort_by(|&a, &b| b.1.render_order.cmp(&a.1.render_order));
+                for (pos, render) in data.iter() {
+                    let idx = map.xy_idx(pos.x, pos.y);
+                    if map.visible_tiles[idx] {
+                        ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph)
+                    }
+                }
+                gui::draw_ui(&self.ecs, ctx);
             }
         }
-        gui::draw_ui(&self.ecs, ctx);
     }
 }
 
@@ -202,16 +242,21 @@ fn main() -> rltk::BError {
     gs.ecs.register::<WantsToMelee>();
     gs.ecs.register::<SufferDamage>();
     gs.ecs.register::<Item>();
+    gs.ecs.register::<ProvidesHealing>();
+    gs.ecs.register::<InflictsDamage>();
+    gs.ecs.register::<AreaOfEffect>();
+    gs.ecs.register::<Consumable>();
+    gs.ecs.register::<Ranged>();
     gs.ecs.register::<InBackpack>();
     gs.ecs.register::<WantsToPickupItem>();
-    gs.ecs.register::<WantsToDropItem>();
     gs.ecs.register::<WantsToUseItem>();
-    gs.ecs.register::<ProvidesHealing>();
-    gs.ecs.register::<Consumable>();
-    gs.ecs.register::<InflictsDamage>();
-    gs.ecs.register::<Ranged>();
-    gs.ecs.register::<AreaOfEffect>();
+    gs.ecs.register::<WantsToDropItem>();
     gs.ecs.register::<Confusion>();
+    gs.ecs.register::<SimpleMarker<SerializeMe>>();
+    gs.ecs.register::<SerializationHelper>();
+
+    // need to insert this before initializing game state so wgite can allocate it.
+    gs.ecs.insert(SimpleMarkerAllocator::<SerializeMe>::new());
 
     let map: Map = Map::new_map_rooms_and_corridors();
     let (player_x, player_y) = map.rooms[0].center();
@@ -226,7 +271,9 @@ fn main() -> rltk::BError {
     gs.ecs.insert(map);
     gs.ecs.insert(Point::new(player_x, player_y));
     gs.ecs.insert(player_entity);
-    gs.ecs.insert(RunState::PreRun);
+    gs.ecs.insert(RunState::MainMenu {
+        menu_selection: gui::MainMenuSelection::NewGame,
+    });
     gs.ecs.insert(gamelog::GameLog {
         entries: vec!["Welcome to Rusty Roguelike".to_string()],
     });

@@ -90,6 +90,9 @@ pub fn player_input(gs: &mut State, ctx: &mut Rltk) -> RunState {
 
             VirtualKeyCode::Numpad1 | VirtualKeyCode::B => try_move_player(-1, 1, &mut gs.ecs),
 
+            // Save and quit
+            VirtualKeyCode::Escape => return RunState::SaveGame,
+
             _ => return RunState::AwaitingInput,
         },
     }
