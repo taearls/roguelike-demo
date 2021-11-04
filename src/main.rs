@@ -213,6 +213,7 @@ impl GameState for State {
                 data.sort_by(|&a, &b| b.1.render_order.cmp(&a.1.render_order));
                 for (pos, render) in data.iter() {
                     let idx = map.xy_idx(pos.x, pos.y);
+                    // is this where i can fix the
                     if map.visible_tiles[idx] {
                         ctx.set(pos.x, pos.y, render.fg, render.bg, render.glyph)
                     }
@@ -258,7 +259,7 @@ fn main() -> rltk::BError {
     // need to insert this before initializing game state so wgite can allocate it.
     gs.ecs.insert(SimpleMarkerAllocator::<SerializeMe>::new());
 
-    let map: Map = Map::new_map_rooms_and_corridors();
+    let map: Map = Map::new_map_rooms_and_corridors(1);
     let (player_x, player_y) = map.rooms[0].center();
 
     let player_entity = spawner::player(&mut gs.ecs, player_x, player_y);
