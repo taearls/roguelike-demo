@@ -1,6 +1,6 @@
 use super::{
-    gamelog::GameLog, CombatStats, Item, Map, Player, Position, RunState, State, Viewshed,
-    WantsToMelee, WantsToPickupItem,
+    gamelog::GameLog, CombatStats, Item, Map, Player, Position, RunState, State, TileType,
+    Viewshed, WantsToMelee, WantsToPickupItem,
 };
 use rltk::{Point, Rltk, VirtualKeyCode};
 use specs::prelude::*;
@@ -59,12 +59,23 @@ pub fn player_input(gs: &mut State, ctx: &mut Rltk) -> RunState {
     match ctx.key {
         None => return RunState::AwaitingInput, // Nothing happened
         Some(key) => match key {
+            // Pick up item
             VirtualKeyCode::G => get_item(&mut gs.ecs),
 
+            // Show Inventory
             VirtualKeyCode::I => return RunState::ShowInventory,
 
+            // Drop Item
             VirtualKeyCode::D => return RunState::ShowDropItem,
 
+            // Go downstairs to next level
+            VirtualKeyCode::Period => {
+                if try_next_level(&mut gs.ecs) {
+                    return RunState::NextLevel;
+                }
+            }
+
+            // Movement
             VirtualKeyCode::Left | VirtualKeyCode::Numpad4 | VirtualKeyCode::H => {
                 try_move_player(-1, 0, &mut gs.ecs)
             }
@@ -97,6 +108,21 @@ pub fn player_input(gs: &mut State, ctx: &mut Rltk) -> RunState {
         },
     }
     RunState::PlayerTurn
+}
+
+pub fn try_next_level(ecs: &mut World) -> bool {
+    let player_pos = ecs.fetch::<Point>();
+    let map = ecs.fetch::<Map>();
+    let player_idx = map.xy_idx(player_pos.x, player_pos.y);
+    if map.tiles[player_idx] == TileType::DownStairs {
+        true
+    } else {
+        let mut gamelog = ecs.fetch_mut::<GameLog>();
+        gamelog
+            .entries
+            .push("There is no way down from here.".to_string());
+        false
+    }
 }
 
 fn get_item(ecs: &mut World) {
