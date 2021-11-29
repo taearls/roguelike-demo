@@ -24,7 +24,9 @@ mod damage_system;
 use damage_system::DamageSystem;
 mod inventory_system;
 use inventory_system::{ItemCollectionSystem, ItemDropSystem, ItemUseSystem};
+mod random_table;
 mod saveload_system;
+use random_table::RandomTable;
 
 #[derive(PartialEq, Copy, Clone)]
 pub enum RunState {
