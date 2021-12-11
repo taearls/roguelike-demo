@@ -123,7 +123,7 @@ impl State {
 
         // Spawn bad guys
         for room in worldmap.rooms.iter().skip(1) {
-            spawner::spawn_room(&mut self.ecs, room);
+            spawner::spawn_room(&mut self.ecs, room, worldmap.depth);
         }
 
         // Place the player and update resources
@@ -358,7 +358,7 @@ fn main() -> rltk::BError {
 
     gs.ecs.insert(rltk::RandomNumberGenerator::new());
     for room in map.rooms.iter().skip(1) {
-        spawner::spawn_room(&mut gs.ecs, room);
+        spawner::spawn_room(&mut gs.ecs, room, map.depth);
     }
 
     gs.ecs.insert(map);
